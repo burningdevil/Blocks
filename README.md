@@ -37,68 +37,15 @@ Capturing automatic variables
 * Global variables
 
 
-## 2. Blocks
+## 2. Block as object
 Compiler never generates human readable source code. But clang has a functionality to generate human-readable converted source code using
 
 > clang -rewrite-objc file_name
 
 Example:
 
-**source code**
-```
-int main()
-{
-    void (^blk)(void) = ^{printf("Block\n");};
-    blk();
-    return 0;
-}
-```
-**converted C code**
-```
-//block struct
-struct __block_impl {
-  void *isa;
-  int Flags;
-  int Reserved;
-  void *FuncPtr;
-};
-
-//block struct
-struct __main_block_impl_0 {
-  struct __block_impl impl;
-  struct __main_block_desc_0* Desc;
-  __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc, int flags=0) {
-    impl.isa = &_NSConcreteStackBlock;
-    impl.Flags = flags;
-    impl.FuncPtr = fp;
-    Desc = desc;
-  }
-};
-
-//block implementation
-static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
-    printf("Block\n");
-}
-
-//block desc struct
-static struct __main_block_desc_0 {
-  size_t reserved;
-  size_t Block_size;
-} __main_block_desc_0_DATA = { 0, sizeof(struct __main_block_impl_0)};
-
-int main()
-{
-    //block defnition
-    void (*blk)(void) = ((void (*)())&__main_block_impl_0((void *)__main_block_func_0, &__main_block_desc_0_DATA));
-    //struct __main_block_impl_0 tmp =
- __main_block_impl_0(__main_block_func_0, &__main_block_desc_0_DATA);
-    //struct __main_block_impl_0 *blk = &tmp; 
-    //call block
-    ((void (*)(__block_impl *))((__block_impl *)blk)->FuncPtr)((__block_impl *)blk);
-    //(*blk->impl.FuncPtr)(blk); 
-    return 0;
-}
-```
+[source code](block.mm)
+[converted C code](block.cpp)
 
 ### _NSConcerateStackBlock and isa
 
@@ -140,62 +87,21 @@ struct class_t {
 ```
 ![QDMGjK.png](https://s2.ax1x.com/2019/12/10/QDMGjK.png)
 
-This __main_block_impl_0 struct is based on the objc_object struct, and is a struct for
-Objective-C class objects. And, its member variable “isa” is initialized as follows.
+> This __main_block_impl_0 struct is based on the objc_object struct, and is a struct for Objective-C class objects. And, its member variable “isa” is initialized as follows.
+
 isa = &_NSConcreteStackBlock;
-This means that _NSConcreteStackBlock is the instance of the class_t struct. 
+
 This means that _NSConcreteStackBlock is the instance of the class_t struct. When the Block is treated as an Objective-C object, _NSConcreteStackBlock has all the information of its class. Now we know that a Block is an Objective-C object.
 
 
 # Capturing variables
 ## Automatic variables(read only)
 
-```
-int main() {
-    int dmy = 256;
-    int val = 10;
-    const char* fmt = "val = %d\n";
-    void (^blk)(void) = ^{printf(fmt, val);};
-    return 0;
-}
-```
+[source code](block_automatic_variables.mm)
 
-transfered code
-```
-struct __main_block_impl_0 {
-  struct __block_impl impl;
-  struct __main_block_desc_0* Desc;
-  //automatic variables are captured in structe as member variables
-  const char *fmt;
-  int val;
-  __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc, const char *_fmt, int _val, int flags=0) : fmt(_fmt), val(_val) {
-    impl.isa = &_NSConcreteStackBlock;
-    impl.Flags = flags;
-    impl.FuncPtr = fp;
-    Desc = desc;
-  }
-};
-static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
-  const char *fmt = __cself->fmt; // bound by copy
-  int val = __cself->val; // bound by copy
-  printf(fmt, val);
-}
+[transfered C code](block_automatic_variables.cpp)
 
-static struct __main_block_desc_0 {
-  size_t reserved;
-  size_t Block_size;
-} __main_block_desc_0_DATA = { 0, sizeof(struct __main_block_impl_0)};
-
-int main() {
-    int dmy = 256;
-    int val = 10;
-    const char *fmt = "val = %d\n";
-    void (*blk)(void) = ((void (*)())&__main_block_impl_0((void *)__main_block_func_0, &__main_block_desc_0_DATA, fmt, val));
-    return 0;
-}
-```
-
-Only the values of the automatic variables used in the Block are captured. 
+> Only the values of the automatic variables used in the Block are captured. 
 
 ## Static and Global Variables(writable)
 In C language, writable variables
@@ -205,124 +111,18 @@ In C language, writable variables
 
 An anonymous function part in a Block literal is simply converted to a C function. In the converted function, static global variables and global variables can be accessed, work without any problem. But static variables are different. 
 
-```
-int global_val = 1;
-static int static_global_val = 2;
-int main()
-{
-    static int static_val = 3; 
-    void (^blk)(void) = ^{
-        global_val *= 1; 
-        static_global_val *= 2; 
-        static_val *= 3;
-    };
-    return 0; 
-}
-```
+[source code](Block_Static_Global.mm)
 
-converted code
-```
-int global_val = 1;
-static int static_global_val = 2;
-
-struct __main_block_impl_0 {
-  struct __block_impl impl;
-  struct __main_block_desc_0* Desc;
-  int *static_val;
-  __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc, int *_static_val, int flags=0) : static_val(_static_val) {
-    impl.isa = &_NSConcreteStackBlock;
-    impl.Flags = flags;
-    impl.FuncPtr = fp;
-    Desc = desc;
-  }
-};
-static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
-  int *static_val = __cself->static_val; // bound by copy
-
-        global_val *= 1;
-        static_global_val *= 2;
-        (*static_val) *= 3;
-    }
-
-static struct __main_block_desc_0 {
-  size_t reserved;
-  size_t Block_size;
-} __main_block_desc_0_DATA = { 0, sizeof(struct __main_block_impl_0)};
-int main()
-{
-    static int static_val = 3;
-    void (*blk)(void) = ((void (*)())&__main_block_impl_0((void *)__main_block_func_0, &__main_block_desc_0_DATA, &static_val));
-    return 0;
-}
-```
+[transfered C code](Block_Static_Global.cpp)
 
 The static variable “static_val” is accessed via its pointer. A pointer to the variable is passed to the constructor of _main_block_impl_0 struct, and then the constructor assigns it. This is the easiest way to use a variable beyond the variable’s scope.
 You might think that accessing automatic variables could be implemented in the same way as static variables. Why not? Because a Block must be able to exist even after the scope of a captured automatic variable is left. When the scope is left, the automatic variable is destroyed. Which means the Block can’t access the automatic variable anymore. So, automatic variables can’t be implemented the same as static variables.
 
 ## __block specifier
-```
-int crash = 10;
-__block int val = 10;
-void (^blk)(void) = ^{
-    //crash = 1;//compiler error
-    val = 1;
-};
-```
 
-transfered code
-```
-struct __Block_byref_val_0 { 
-    void *__isa;
-    __Block_byref_val_0 *__forwarding; 
-    int __flags;
-    int __size;
-    int val;
-};
-struct __main_block_impl_0 {
-    struct __block_impl impl;
-    struct __main_block_desc_0* Desc;
-    __Block_byref_val_0 *val;
-    __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc,
-            __Block_byref_val_0 *_val, int flags=0) : val(_val->__forwarding) { 
-        impl.isa = &_NSConcreteStackBlock;
-        impl.Flags = flags;
-        impl.FuncPtr = fp;
-        Desc = desc;
-    }
-};
-static void __main_block_func_0(struct __main_block_impl_0 *__cself)
-{
-    __Block_byref_val_0 *val = __cself->val;
-    (val->__forwarding->val) = 1;
-}
-static void __main_block_copy_0( struct __main_block_impl_0*dst, struct __main_block_impl_0*src)
-{
-    _Block_object_assign(&dst->val, src->val, BLOCK_FIELD_IS_BYREF);
-}
-static void __main_block_dispose_0(struct __main_block_impl_0*src) {
-    _Block_object_dispose(src->val, BLOCK_FIELD_IS_BYREF);
-}
-static struct __main_block_desc_0 {
-    unsigned long reserved;
-    unsigned long Block_size;
-    void (*copy)(struct __main_block_impl_0*, struct __main_block_impl_0*); void (*dispose)(struct __main_block_impl_0*);
-} __main_block_desc_0_DATA = { 0,
-    sizeof(struct __main_block_impl_0),
-    __main_block_copy_0, __main_block_dispose_0
-};
-int main()
-{
-    __Block_byref_val_0 val = {
-        0,
-        &val,
-        0, 
-        sizeof(__Block_byref_val_0), 
-        10
-    };
-    blk = &__main_block_impl_0(__main_block_func_0, &__main_block_desc_0_DATA, &val, 0x22000000);
-    return 0;
-}
-```
+[source code](Block_Block.mm)
+
+[transfered C code](Block_Block.cpp)
 
 ![QDJczd.png](https://s2.ax1x.com/2019/12/10/QDJczd.png)
 
@@ -348,7 +148,7 @@ blk1 = &__main_block_impl_1(
  __main_block_func_1, &__main_block_desc_1_DATA, &val, 0x22000000);
 ```
 
-## Memory Segments for Blocks
+# Memory Segments for Blocks
 
 
 Name | Under the Hood
@@ -377,8 +177,6 @@ exist where the global variables are declared, capturing never happens. In other
 the member variables of the instance for the Block don’t rely on the execution context. 
 
 Summary:
-
-
 - **NSConcreteGlobalBlock** are used when
 1. when there are global variables
 2. when a Block literal is
@@ -387,7 +185,7 @@ inside a function and doesn’t capture any automatic variables
 1. Any Block created by another kind of Block literal will be an object of
 the _NSConcreteStackBlock class, and be stored on the stack
 - **NSConcreteMallocBlock**
-1. copy block
+1. copy block from stack
 
 
 Meanwhile, a __block variable must be accessed properly no matter where it is on the stack or the heap. The member variable “__forwarding” in the struct for a __block variable is used for that. 
