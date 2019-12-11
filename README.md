@@ -315,6 +315,7 @@ In these cases, the Block will be a _NSConcreteGlobalBlock class object and is s
 ### NSConcreteMallocBlock
 
 [source code](copy_block.mm)
+
 [convert C code](copy_block.cpp)
 
 By copying a stack block, the copied block on the heap can exists after the scope is left.
@@ -378,8 +379,8 @@ return objc_autoreleaseReturnValue(tmp);
 This means when the function returns the Block, the compiler automatically copies it to the heap. 
 
 ### Copying Blocks Manually
+**Using copy() function.**
 
-** Using copy() function.
 When do ARC can not detect it?
 - When a Block is passed as an argument for methods or functions.
     -  Except: Cocoa Framework methods, the name of which includes "usingBlock" or GCD API
@@ -396,6 +397,7 @@ NSConcreteMallocBlock | Heap | add reference count
 
 When a Block is copied from the stack to the heap and it uses __block variables and the __block variables aren’t used in the other Blocks, the __block variables must be on the stack. And, at the moment, all the __block variables are also copied from the stack to the heap and the Block has ownership of the __block variables.
 When the Block on the heap is copied again, the __block variables will not be affected.
+
 ![QrAkxe.png](https://s2.ax1x.com/2019/12/11/QrAkxe.png)
 
 
