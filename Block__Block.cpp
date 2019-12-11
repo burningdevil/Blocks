@@ -6,8 +6,8 @@ struct __block_impl {
 };
 
 struct __Block_byref_val_0 {
-  void *__isa;
-__Block_byref_val_0 *__forwarding;
+ void *__isa;
+ __Block_byref_val_0 *__forwarding;
  int __flags;
  int __size;
  int val;
