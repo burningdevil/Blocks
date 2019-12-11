@@ -1,4 +1,4 @@
-# Block implementation
+# Block
 ## 1. Block review
 
 **Block is anonymous functions together with automatic variables.**
@@ -37,7 +37,7 @@ Capturing automatic variables
 * Global variables
 
 
-## 2. Block as an object
+## 2. Block as objc object
 Compiler never generates human readable source code. But clang has a functionality to generate human-readable converted source code using
 
 > clang -rewrite-objc file_name
@@ -48,9 +48,77 @@ Example:
 
 [converted C code](block.cpp)
 
+**implementation of block**
+```
+static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
+  printf("Block\n");
+}
+```
+__cself is equal to this in C++ and self in OC.
+
+**block structure**
+```
+//block impl structure
+struct __block_impl {
+  void *isa;
+  int Flags;
+  int Reserved;
+  void *FuncPtr;
+};
+
+//block structure
+struct __main_block_impl_0 {
+  struct __block_impl impl;
+  struct __main_block_desc_0* Desc;
+  __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc, int flags=0) {
+    impl.isa = &_NSConcreteStackBlock;
+    impl.Flags = flags;
+    impl.FuncPtr = fp;
+    Desc = desc;
+  }
+};
+
+static struct __main_block_desc_0 {
+  size_t reserved;
+  size_t Block_size;
+} __main_block_desc_0_DATA = { 0, sizeof(struct __main_block_impl_0)};
+```
+
+**init a block**
+```
+void (*blk)(void) = ((void (*)())&__main_block_impl_0((void *)__main_block_func_0, &__main_block_desc_0_DATA));
+    //struct __main_block_impl_0 tmp = __main_block_impl_0(__main_block_func_0, &__main_block_desc_0_DATA);
+    //struct __main_block_impl_0 *blk = &tmp;
+```
+
+**call a block**
+```
+((void (*)(__block_impl *))((__block_impl *)blk)->FuncPtr)((__block_impl *)blk);
+//(*blk->impl.FuncPtr)(blk); 
+```
+
+### Block Data Structure
+```
+struct Block_descriptor_1 {
+    uintptr_t reserved;
+    uintptr_t size;
+};
+ 
+struct Block_layout {
+    void *isa;
+    volatile int32_t flags; // contains ref count
+    int32_t reserved; 
+    void (*invoke)(void *, ...);
+    struct Block_descriptor_1 *descriptor;
+    // imported variables
+};
+```
+![image](https://upload-images.jianshu.io/upload_images/1727123-b2963eb80edb4d78.png?imageMogr2/auto-orient/strip|imageView2/2/w/510)
+
 ### _NSConcerateStackBlock and isa
 
 **isa = &_NSConcerateStackBlock;**
+
 ```
 typedef struct objc_object {
     Class isa;
@@ -96,6 +164,13 @@ struct class_t {
 This means that _NSConcreteStackBlock is the instance of the class_t struct. When the Block is treated as an Objective-C object, _NSConcreteStackBlock has all the information of its class. Now we know that a Block is an Objective-C object.
 
 # Capturing variables
+
+External variables:
+* Automatic variables(local variables)
+* Static variables
+* Static global variables
+* Global variables
+
 ## Automatic variables(read only)
 
 [source code](block_automatic_variables.mm)
@@ -112,7 +187,7 @@ struct __main_block_impl_0 {
   __main_block_impl_0(void *fp, struct __main_block_desc_0 *desc, const char *_fmt, int _val, int flags=0) : fmt(_fmt), val(_val) {
   }
 ```
-> automatic variables is captured in block struct as member variables.
+> Automatic variables is captured in block struct as member variables.
 
 > Only the values of the automatic variables used in the Block are captured.
 
@@ -121,7 +196,6 @@ In C language, writable variables
 * static variables
 * static global variables
 * global variables
-
 [source code](Block_Static_Global.mm)
 
 [transfered C code](Block_Static_Global.cpp)
@@ -147,6 +221,7 @@ A Block must be able to exist even after the scope of a captured automatic varia
 
 [transfered C code](Block_Block.cpp)
 
+**__block structure**
 ```
 struct __Block_byref_val_0 { void *__isa;
     __Block_byref_val_0 *__forwarding; 
@@ -162,7 +237,9 @@ __Block_byref_val_0 val = {
     sizeof(__Block_byref_val_0),
     10 
 };
-
+```
+**assign to __block variable**
+```
 static void __main_block_func_0(struct __main_block_impl_0 *__cself)
 {
     __Block_byref_val_0 *val = __cself->val;
@@ -191,13 +268,14 @@ blk1 = &__main_block_impl_1(
  __main_block_func_1, &__main_block_desc_1_DATA, &val, 0x22000000);
 ```
 
-# Memory Segments for Blocks
 Name | Under the Hood
 ---|---
 Block | An instance of a struct of the Block. On stack
 __block variable | An instance of a struct for __block variable. On stack
 
-NSConcrete*Blocks:
+# Memory Segments for Blocks
+
+More of NSConcrete*Blocks:
 * _NSConcreteStackBlock
 * _NSConcreteGlobalBlock
 * _NSConcreteMallocBlock
@@ -227,8 +305,14 @@ for (int rate = 0; rate < 10; ++rate) {
     blk_t blk = ^(int count){return count;};
 }
 ```
+- When a Block literal is written where there are global variables
+- When the syntax in a Block literal doesn’t use any automatic variables to be captured
 
-### Block on Heap
+In these cases, the Block will be a _NSConcreteGlobalBlock class object and is stored in the data section. Any Block created by another kind of Block literal will be an object of the _NSConcreteStackBlock class, and be stored on the stack.
+
+[test](block_global_test.mm)
+
+### NSConcreteMallocBlock
 
 By copying a stack block, the copied block on the heap can exists after the scope is left.
 
@@ -241,14 +325,12 @@ Even if a __block variable has been copied to the heap, the __block variable on 
 ### Summary
 - **NSConcreteGlobalBlock** are used when
 1. when there are global variables
-2. when a Block literal is
-inside a function and doesn’t capture any automatic variables
+2. when a Block literal is inside a function and doesn’t capture any automatic variables
 - **NSConcreteStackBlock**
 1. Any Block created by another kind of Block literal will be an object of
 the _NSConcreteStackBlock class, and be stored on the stack
 - **NSConcreteMallocBlock**
 1. copy block from stack
-
 
 ### Copying Blocks Automatically
 By the way, how do Blocks offer copy functionality? To tell the truth, when ARCenabled, in many cases the compiler automatically detects and copies the Block from the stack to the heap. Let’s see the next example, which calls a function returning a Block.
@@ -276,7 +358,6 @@ If you’d read the source code runtime/objc-arr.mm in the objc4 runtime library
 tmp = _Block_copy(tmp);
 return objc_autoreleaseReturnValue(tmp);
 ```
-Let’s see what happens with comments:
 ```
  /*
  * a Block is assigned from a Block literal to a variable 'tmp',
@@ -286,22 +367,27 @@ Let’s see what happens with comments:
  */
 tmp = _Block_copy(tmp);
  /*
- * Then, the Block on the heap is registered to an autoreleasepool as an Objective-C
-object.
+ * Then, the Block on the heap is registered to an autoreleasepool as an Objective-C object.
  * After that, the Block is returned.
  */
 return objc_autoreleaseReturnValue(tmp);
 ```
-This means when the function returns the Block, the compiler automatically copies it to
-the heap. 
+This means when the function returns the Block, the compiler automatically copies it to the heap. 
 
+### Copying Blocks Manually
 
+** Using copy() function.
+When do ARC can not detect it?
+- When a Block is passed as an argument for methods or functions.
+    -  Except: Cocoa Framework methods, the name of which includes "usingBlock" or GCD API
 
  Block class | Copied from | How copy works
 ---|---|---
 NSConcreteStackBlock | stack | from stack to heap
 NSConcreteGlobalBlock | data section | do nothing
 NSConcreteMallocBlock | Heap | add reference count
+
+
 
 ## Memeory Segments for __block variables
 
@@ -325,7 +411,7 @@ __block int val = 0;
 blk();
 NSLog(@"%d", val); 
 ```
-
+both __block variables access is using
 ```
 ++(val.__forwarding->val); 
 ```
@@ -417,6 +503,12 @@ typedef void (^blk_t)(void);
 @end 
 ```
 ![QrEEWT.png](https://s2.ax1x.com/2019/12/11/QrEEWT.png)
+
+**What's wrong with this soultion**
+
 If the instance method “execBlock” isn’t called, the circular reference causes a memory leak. By calling the instance method “execBlock”, the Block is executed and nil is assigned to the __block variable “tmp”. 
 
 # Summary
+- How automatic variables are captured
+- How __block variables are achieved
+- How a circular reference problem occurs due to captured objects and how to solve it

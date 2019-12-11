@@ -66,4 +66,3 @@ int main()
     }
     return 0;
 }
-static struct IMAGE_INFO { unsigned version; unsigned flag; } _OBJC_IMAGE_INFO = { 0, 2 };

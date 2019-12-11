@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 void (^blk)(void) = ^{printf("Block\n");};
+
 typedef int (^blk_t)(int);
 
 int main()

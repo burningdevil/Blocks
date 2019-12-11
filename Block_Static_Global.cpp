@@ -21,11 +21,10 @@ struct __main_block_impl_0 {
 };
 static void __main_block_func_0(struct __main_block_impl_0 *__cself) {
   int *static_val = __cself->static_val; // bound by copy
-
-        global_val *= 1;
-        static_global_val *= 2;
-        (*static_val) *= 3;
-    }
+  global_val *= 1;
+  static_global_val *= 2;
+  (*static_val) *= 3;
+}
 
 static struct __main_block_desc_0 {
   size_t reserved;
