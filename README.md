@@ -314,6 +314,9 @@ In these cases, the Block will be a _NSConcreteGlobalBlock class object and is s
 
 ### NSConcreteMallocBlock
 
+[source code](copy_block.mm)
+[convert C code](copy_block.cpp)
+
 By copying a stack block, the copied block on the heap can exists after the scope is left.
 
 Meanwhile, a __block variable must be accessed properly no matter where it is on the stack or the heap. The member variable “__forwarding” in the struct for a __block variable is assigned to the one in heap. 
